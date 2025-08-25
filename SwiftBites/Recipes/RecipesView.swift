@@ -6,15 +6,15 @@ struct RecipesView: View {
   @State private var query = ""
   @State private var sortOrder = SortDescriptor(\Recipe.name)
 
-  @Query private var recipes: [Recipe]
+  @Query private var allRecipes: [Recipe]
   // MARK: - Body
-
+ 
   var body: some View {
     NavigationStack {
       content
         .navigationTitle("Recipes")
         .toolbar {
-          if !recipes.isEmpty {
+          if !allRecipes.isEmpty {
             sortOptions
             ToolbarItem(placement: .topBarTrailing) {
               NavigationLink(value: RecipeForm.Mode.add) {
@@ -58,21 +58,11 @@ struct RecipesView: View {
 
   @ViewBuilder
   private var content: some View {
-    let filteredRecipes = recipes.filter { recipe in
-      if query.isEmpty {
-          return true
-      } else {
-          return recipe.name.localizedStandardContains(query) ||
-                 recipe.summary.localizedStandardContains(query)
-      }
-    }.sorted(using: sortOrder)
-      
-    if recipes.isEmpty {
+    if allRecipes.isEmpty {
         empty
-    } else if filteredRecipes.isEmpty {
-        noResults
     } else {
-        list(for: filteredRecipes)
+        FilteredRecipesList(query: query, sortOrder: sortOrder)
+            .searchable(text: $query)
     }
   }
 
@@ -91,25 +81,41 @@ struct RecipesView: View {
       }
     )
   }
+}
 
-  private var noResults: some View {
-    ContentUnavailableView(
-      label: {
-        Text("Couldn't find \"\(query)\"")
-      }
-    )
-  }
+private struct FilteredRecipesList: View {
+    @Query private var recipes: [Recipe]
+    private var query: String
 
-  private func list(for recipes: [Recipe]) -> some View {
-    ScrollView(.vertical) {
-      if recipes.isEmpty {
-        noResults
-      } else {
-        LazyVStack(spacing: 10) {
-          ForEach(recipes, content: RecipeCell.init)
+    init(query: String, sortOrder: SortDescriptor<Recipe>) {
+        self.query = query
+        
+        let predicate = #Predicate<Recipe> { recipe in
+            query.isEmpty ||
+            recipe.name.localizedStandardContains(query) ||
+            recipe.summary.localizedStandardContains(query)
         }
-      }
+        
+        _recipes = Query(filter: predicate, sort: [sortOrder])
     }
-    .searchable(text: $query)
-  }
+
+    var body: some View {
+        ScrollView(.vertical) {
+            if recipes.isEmpty {
+                noResults
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(recipes, content: RecipeCell.init)
+                }
+            }
+        }
+    }
+    
+    private var noResults: some View {
+      ContentUnavailableView(
+        label: {
+          Text("Couldn't find \"\(query)\"")
+        }
+      )
+    }
 }

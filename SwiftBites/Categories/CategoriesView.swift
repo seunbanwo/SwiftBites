@@ -3,7 +3,7 @@ import SwiftData
 
 struct CategoriesView: View {
   @Environment(\.modelContext) private var modelContext
-  @Query(sort: \Category.name) private var categories: [Category]
+  @Query private var allCategories: [Category]
   @State private var query = ""
 
   // MARK: - Body
@@ -13,7 +13,7 @@ struct CategoriesView: View {
       content
         .navigationTitle("Categories")
         .toolbar {
-          if !categories.isEmpty {
+          if !allCategories.isEmpty {
             NavigationLink(value: CategoryForm.Mode.add) {
               Label("Add", systemImage: "plus")
             }
@@ -29,25 +29,15 @@ struct CategoriesView: View {
   }
 
   // MARK: - Views
-
-  @ViewBuilder
-  private var content: some View {
-    let filteredCategories = categories.filter { category in
-      if query.isEmpty {
-          return true
-      } else {
-          return category.name.localizedStandardContains(query)
-      }
+    @ViewBuilder
+    private var content: some View {
+        if allCategories.isEmpty {
+            empty
+        } else {
+            FilteredCategoriesList(query: query)
+                .searchable(text: $query)
+        }
     }
-  
-    if categories.isEmpty {
-        empty
-    } else if filteredCategories.isEmpty {
-        noResults
-    } else {
-        list(for: filteredCategories)
-    }
-  }
 
   private var empty: some View {
     ContentUnavailableView(
@@ -64,25 +54,38 @@ struct CategoriesView: View {
       }
     )
   }
+}
 
-  private var noResults: some View {
-    ContentUnavailableView(
-      label: {
-        Text("Couldn't find \"\(query)\"")
-      }
-    )
-  }
+private struct FilteredCategoriesList: View {
+    @Query private var categories: [Category]
+    private var query: String
 
-  private func list(for categories: [Category]) -> some View {
-    ScrollView(.vertical) {
-      if categories.isEmpty {
-        noResults
-      } else {
-        LazyVStack(spacing: 10) {
-          ForEach(categories, content: CategorySection.init)
+    init(query: String) {
+        self.query = query
+        let predicate = #Predicate<Category> { category in
+            query.isEmpty || category.name.localizedStandardContains(query)
         }
-      }
+        
+        _categories = Query(filter: predicate, sort: \Category.name)
     }
-    .searchable(text: $query)
-  }
+
+    var body: some View {
+        ScrollView(.vertical) {
+            if categories.isEmpty {
+                noResults
+            } else {
+                LazyVStack(spacing: 10) {
+                    ForEach(categories, content: CategorySection.init)
+                }
+            }
+        }
+    }
+    
+    private var noResults: some View {
+      ContentUnavailableView(
+        label: {
+          Text("Couldn't find \"\(query)\"")
+        }
+      )
+    }
 }

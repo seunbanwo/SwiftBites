@@ -10,9 +10,8 @@ struct IngredientsView: View {
     self.selection = selection
   }
 
-  @Query(sort: \Ingredient.name) private var ingredients: [Ingredient]
+  @Query private var allIngredients: [Ingredient]
   @Environment(\.modelContext) private var modelContext
-  @Environment(\.dismiss) private var dismiss
   @State private var query = ""
 
   // MARK: - Body
@@ -22,7 +21,7 @@ struct IngredientsView: View {
       content
         .navigationTitle("Ingredients")
         .toolbar {
-          if !ingredients.isEmpty {
+          if !allIngredients.isEmpty {
             NavigationLink(value: IngredientForm.Mode.add) {
               Label("Add", systemImage: "plus")
             }
@@ -38,20 +37,15 @@ struct IngredientsView: View {
 
   @ViewBuilder
   private var content: some View {
-      let filteredIngredients = ingredients.filter { ingredient in
-          if query.isEmpty {
-              return true
-          } else {
-              return ingredient.name.localizedStandardContains(query)
-          }
-      }
-      
-      if ingredients.isEmpty {
+      if allIngredients.isEmpty {
           empty
-      } else if filteredIngredients.isEmpty {
-          noResults
       } else {
-          list(for: filteredIngredients)
+          FilteredIngredientsList(
+              query: query,
+              selection: selection,
+              onDelete: delete
+          )
+          .searchable(text: $query)
       }
   }
 
@@ -71,61 +65,83 @@ struct IngredientsView: View {
     )
   }
 
-  private var noResults: some View {
-    ContentUnavailableView(
-      label: {
-        Text("Couldn't find \"\(query)\"")
-      }
-    )
-    .listRowSeparator(.hidden)
-  }
-
-  private func list(for ingredients: [Ingredient]) -> some View {
-    List {
-      if ingredients.isEmpty {
-        noResults
-      } else {
-        ForEach(ingredients) { ingredient in
-          row(for: ingredient)
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-              Button("Delete", systemImage: "trash", role: .destructive) {
-                delete(ingredient: ingredient)
-              }
-            }
-        }
-      }
-    }
-    .searchable(text: $query)
-    .listStyle(.plain)
-  }
-
-  @ViewBuilder
-  private func row(for ingredient: Ingredient) -> some View {
-    if let selection {
-      Button(
-        action: {
-          selection(ingredient)
-          dismiss()
-        },
-        label: {
-          title(for: ingredient)
-        }
-      )
-    } else {
-      NavigationLink(value: IngredientForm.Mode.edit(ingredient)) {
-        title(for: ingredient)
-      }
-    }
-  }
-
-  private func title(for ingredient: Ingredient) -> some View {
-    Text(ingredient.name)
-      .font(.title3)
-  }
-
   // MARK: - Data
 
   private func delete(ingredient: Ingredient) {
       modelContext.delete(ingredient)
   }
+}
+
+private struct FilteredIngredientsList: View {
+    typealias Selection = IngredientsView.Selection
+
+    @Query private var ingredients: [Ingredient]
+    @Environment(\.dismiss) private var dismiss
+
+    private let query: String
+    private let selection: Selection?
+    private let onDelete: (Ingredient) -> Void
+    
+    init(query: String, selection: Selection?, onDelete: @escaping (Ingredient) -> Void) {
+        self.query = query
+        self.selection = selection
+        self.onDelete = onDelete
+        
+        let predicate = #Predicate<Ingredient> { ingredient in
+            query.isEmpty || ingredient.name.localizedStandardContains(query)
+        }
+        
+        _ingredients = Query(filter: predicate, sort: \Ingredient.name)
+    }
+    
+    var body: some View {
+        List {
+            if ingredients.isEmpty {
+                noResults
+            } else {
+                ForEach(ingredients) { ingredient in
+                    row(for: ingredient)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button("Delete", systemImage: "trash", role: .destructive) {
+                                onDelete(ingredient)
+                            }
+                        }
+                }
+            }
+        }
+        .listStyle(.plain)
+    }
+    
+    private var noResults: some View {
+      ContentUnavailableView(
+        label: {
+          Text("Couldn't find \"\(query)\"")
+        }
+      )
+      .listRowSeparator(.hidden)
+    }
+    
+    @ViewBuilder
+    private func row(for ingredient: Ingredient) -> some View {
+      if let selection {
+        Button(
+          action: {
+            selection(ingredient)
+            dismiss()
+          },
+          label: {
+            title(for: ingredient)
+          }
+        )
+      } else {
+        NavigationLink(value: IngredientForm.Mode.edit(ingredient)) {
+          title(for: ingredient)
+        }
+      }
+    }
+
+    private func title(for ingredient: Ingredient) -> some View {
+      Text(ingredient.name)
+        .font(.title3)
+    }
 }
