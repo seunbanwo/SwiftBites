@@ -1,7 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct CategoriesView: View {
-  @Environment(\.storage) private var storage
+  @Environment(\.modelContext) private var modelContext
+  @Query(sort: \Category.name) private var categories: [Category]
   @State private var query = ""
 
   // MARK: - Body
@@ -11,7 +13,7 @@ struct CategoriesView: View {
       content
         .navigationTitle("Categories")
         .toolbar {
-          if !storage.categories.isEmpty {
+          if !categories.isEmpty {
             NavigationLink(value: CategoryForm.Mode.add) {
               Label("Add", systemImage: "plus")
             }
@@ -30,16 +32,20 @@ struct CategoriesView: View {
 
   @ViewBuilder
   private var content: some View {
-    if storage.categories.isEmpty {
-      empty
-    } else {
-      list(for: storage.categories.filter {
-        if query.isEmpty {
+    let filteredCategories = categories.filter { category in
+      if query.isEmpty {
           return true
-        } else {
-          return $0.name.localizedStandardContains(query)
-        }
-      })
+      } else {
+          return category.name.localizedStandardContains(query)
+      }
+    }
+  
+    if categories.isEmpty {
+        empty
+    } else if filteredCategories.isEmpty {
+        noResults
+    } else {
+        list(for: filteredCategories)
     }
   }
 
@@ -67,7 +73,7 @@ struct CategoriesView: View {
     )
   }
 
-  private func list(for categories: [MockCategory]) -> some View {
+  private func list(for categories: [Category]) -> some View {
     ScrollView(.vertical) {
       if categories.isEmpty {
         noResults
